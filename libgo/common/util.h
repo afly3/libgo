@@ -106,6 +106,66 @@ public:
 private:
     RefObject *ptr_;
 };
+
+// 侵入式引用计数智能指针
+template <typename T>
+class SharedPtr
+{
+public:
+    SharedPtr() : ptr_(nullptr) {}
+    explicit SharedPtr(T* ptr) : ptr_(ptr) {
+        if (ptr_) ptr_->IncrementRef();
+    }
+    ~SharedPtr() {
+        if (ptr_) ptr_->DecrementRef();
+    }
+
+    SharedPtr(SharedPtr const& other) : ptr_(other.ptr_) {
+        if (ptr_) ptr_->IncrementRef();
+    }
+    SharedPtr(SharedPtr && other) {
+        std::swap(ptr_, other.ptr_);
+    }
+    SharedPtr& operator=(SharedPtr const& other) {
+        if (this == &other) return *this;
+        reset();
+        ptr_ = other.ptr_;
+        if (ptr_) ptr_->IncrementRef();
+        return *this;
+    }
+    SharedPtr& operator=(SharedPtr && other) {
+        if (this == &other) return *this;
+        reset();
+        std::swap(ptr_, other.ptr_);
+        return *this;
+    }
+
+    T& operator*() const { return *ptr_; }
+    T* operator->() const { return ptr_; }
+    explicit operator bool() const { return !!ptr_; }
+    T* get() const { return ptr_; }
+
+    void reset() {
+        if (ptr_) {
+            ptr_->DecrementRef();
+            ptr_ = nullptr;
+        }
+    }
+
+    friend inline bool operator==(SharedPtr const& lhs, SharedPtr const& rhs) {
+        return lhs.ptr_ == rhs.ptr_;
+    }
+    friend inline bool operator!=(SharedPtr const& lhs, SharedPtr const& rhs) {
+        return lhs.ptr_ != rhs.ptr_;
+    }
+    friend inline bool operator<(SharedPtr const& lhs, SharedPtr const& rhs) {
+        return lhs.ptr_ < rhs.ptr_;
+    }
+
+private:
+    T* ptr_;
+};
+
 ///////////////////////////////////////
 
 // 创建协程的源码文件位置
