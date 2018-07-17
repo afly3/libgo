@@ -289,15 +289,20 @@ public:
     ALWAYS_INLINE void push(SList<T> && elements)
     {
         if (elements.empty()) return ;
+        LockGuard lock(lock_);
         assert(elements.head_->prev == nullptr);
         assert(elements.tail_->next == nullptr);
-        LockGuard lock(lock_);
+        auto listHead = elements.head();
         count_ += elements.size();
-        tail_->next = elements.head();
+        tail_->next = listHead;
         elements.head()->prev = tail_;
         elements.tail()->next = nullptr;
         tail_ = elements.tail();
         elements.stealed();
+#if LIBGO_DEBUG
+        for (auto pos = listHead; pos; pos = pos->next)
+            pos->check_ = check_;
+#endif
     }
 
     // O(n), 慎用.
@@ -309,8 +314,15 @@ public:
         TSQueueHook* first = head_->next;
         TSQueueHook* last = first;
         uint32_t c = 1;
-        for (; c < n && last->next; ++c)
+#if LIBGO_DEBUG
+        first->check_ = nullptr;
+#endif
+        for (; c < n && last->next; ++c) {
             last = last->next;
+#if LIBGO_DEBUG
+            last->check_ = nullptr;
+#endif
+        }
         if (last == tail_) tail_ = head_;
         head_->next = last->next;
         if (last->next) last->next->prev = head_;
@@ -332,8 +344,16 @@ public:
         TSQueueHook* last = tail_;
         TSQueueHook* first = last;
         uint32_t c = 1;
-        for (; c < n && first->prev && first->prev != head_; ++c)
+#if LIBGO_DEBUG
+        first->check_ = nullptr;
+#endif
+        for (; c < n && first->prev != head_; ++c) {
+            assert(first->prev != nullptr);
             first = first->prev;
+#if LIBGO_DEBUG
+            first->check_ = nullptr;
+#endif
+        }
         tail_ = first->prev;
         first->prev = tail_->next = nullptr;
         count_ -= c;
@@ -368,7 +388,10 @@ public:
 
     ALWAYS_INLINE bool eraseWithoutLock(T* hook, bool check = false)
     {
-        if (check && hook->check_ != (void*)check_) return false;
+        if (check && hook->check_ != check_) return false;
+#if LIBGO_DEBUG
+        assert(hook->check_ == check_);
+#endif
         assert(hook->prev != nullptr);
         assert(hook == tail_ || hook->next != nullptr);
         if (hook->prev) hook->prev->next = hook->next;

@@ -291,6 +291,8 @@ Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
     assert(tk->state_ == TaskState::runnable);
 
     tk->state_ = TaskState::block;
+    uint64_t id = ++ TaskRefSuspendId(tk);
+
     runnableQueue_.next(runningTask_, nextTask_);
     if (!nextTask_ && addNewQuota_ > 0) {
         if (AddNewTasks()) {
@@ -298,7 +300,6 @@ Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
             -- addNewQuota_;
         }
     }
-    uint64_t id = ++ TaskRefSuspendId(tk);
     runnableQueue_.erase(runningTask_);
     waitQueue_.push(runningTask_);
     return SuspendEntry{ WeakPtr<Task>(tk), id };
@@ -323,7 +324,7 @@ bool Processer::WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id)
         std::unique_lock<TaskQueue::lock_t> lock(waitQueue_.LockRef());
         if (id != TaskRefSuspendId(tk)) return false;
         ++ TaskRefSuspendId(tk);
-        bool ret = waitQueue_.eraseWithoutLock(tk);
+        bool ret = waitQueue_.eraseWithoutLock(tk, true);
         assert(ret);
     }
 
